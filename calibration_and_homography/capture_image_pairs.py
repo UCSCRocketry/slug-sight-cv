@@ -11,7 +11,7 @@ cam1 = Picamera2(1)
 cam0.start()
 cam1.start()
 
-for i in range(10):  # capture 10 pairs
+for i in range(30):  # capture 30 pairs of images
     frame0 = cam0.capture_array()  # Returns a NumPy array of image data
     frame1 = cam1.capture_array()  # same thing
     cv2.imwrite(f"calib_images/left_{i:02d}.jpg", frame0)  

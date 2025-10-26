@@ -102,8 +102,7 @@ print("Left RMS error:", retL)
 print("Right RMS error:", retR)
 
 
-# Calibration - Finds the rotation (R) and translation (T) between the two cameras
-
+# Finds the rotation (R) and translation (T) between the two cameras
 stereo_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-5)
 flags = cv2.CALIB_FIX_INTRINSIC
 

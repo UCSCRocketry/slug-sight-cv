@@ -6,7 +6,7 @@ import os
 # Path from calibrate-image_pairs.py
 CALIB_DIR = "calib_images"
 
-# (7, 6) means 7 inner corners horizontally, 6 vertically
+# (7, 6) means 7 inner corners horizontally, 6 vertically (8 x 7 squares)
 CHECKERBOARD = (7, 6)
 SQUARE_SIZE = 0.27  # measured dimensions
 
@@ -60,7 +60,7 @@ for i in range(num_pairs):
 
     # Store image size once
     if image_size is None:
-        image_size = (grayL.shape[1], grayL.shape[0])  # (width, height) (we reshaped this earlier)
+        image_size = (grayL.shape[1], grayL.shape[0])  # (width, height) 
 
     # Try to find the inner corners of the checkerboard
     foundL, cornersL = cv2.findChessboardCorners(grayL, CHECKERBOARD, None)
@@ -79,9 +79,9 @@ for i in range(num_pairs):
         if first_good_pair is None:
             first_good_pair = (cornersL.copy(), cornersR.copy())
 
-        print(f"✅ Pair {i}: corners found.")
+        print(f"Pair {i}: corners found.")
     else:
-        print(f"⚠️  Pair {i}: corners NOT found.")
+        print(f"Pair {i}: corners NOT found.")
 
 print(f"\nTotal valid pairs used: {len(objpoints)}")
 if len(objpoints) < 5:
@@ -98,7 +98,7 @@ retR, K2, D2, rvecsR, tvecsR = cv2.calibrateCamera(
     objpoints, imgpoints_R, image_size, None, None
 )
 
-print("\n🎯 Intrinsic Calibration Results:")
+print("\n Intrinsic Calibration Results:")
 print("Left RMS error:", retL)
 print("Right RMS error:", retR)
 
@@ -114,7 +114,7 @@ retStereo, K1, D1, K2, D2, R, T, E, F = cv2.stereoCalibrate(
     criteria=stereo_criteria, flags=flags
 )
 
-print("\n🔧 Stereo Calibration Complete")
+print("\n Stereo Calibration Complete")
 print(f"Reprojection Error: {retStereo}")
 print("Rotation matrix (R):\n", R)
 print("Translation vector (T):\n", T)
@@ -145,4 +145,4 @@ print("\n Saved calibration results:")
 print(" - calib_output/stereo_params.npz  (intrinsics, distortion, R, T)")
 print(" - calib_output/homography.npy     (3x3 homography matrix)\n")
 
-print("Calibration + Homography Complete!")
+print("\n Calibration + Homography Complete!")

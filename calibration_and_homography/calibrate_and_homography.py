@@ -8,7 +8,7 @@ CALIB_DIR = "calib_images"
 
 # (7, 6) means 7 inner corners horizontally, 6 vertically (8 x 7 squares)
 CHECKERBOARD = (7, 6)
-SQUARE_SIZE = 0.27  # measured dimensions
+SQUARE_SIZE = 0.27  
 
 # Termination criteria for corner refinement
 # Stops either after 30 iterations or when corner position accuracy improves < 0.001
@@ -42,42 +42,41 @@ imgpoints_L = []  # 2D points in left camera (pixel points)
 imgpoints_R = []  # 2D points in right camera (pixel points)
 
 image_size = None
-first_good_pair = None  # for homography computation
+first_good_pair_index = None  # for homography computation
 
 
 # Find Chessboard Corners
-for i in range(num_pairs):
-    left = cv2.imread(left_images[i])
-    right = cv2.imread(right_images[i])
+for i, (left_path, right_path) in enumerate(zip(left_images, right_images)):
+
+    left = cv2.imread(left_path, cv2.IMREAD_GRAYSCALE)
+    right = cv2.imread(right_path, cv2.IMREAD_GRAYSCALE)
 
     if left is None or right is None:
         print(f"Could not read pair {i}, skipping.")
         continue
 
-    # findChessboardCorners requires grayscale cconversion
-    grayL = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
-    grayR = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
+    # findChessboardCorners requires grayscale conversion (images already loaded in gray)
 
     # Store image size once
     if image_size is None:
-        image_size = (grayL.shape[1], grayL.shape[0])  # (width, height) 
+        image_size = (left.shape[1], left.shape[0])  # (width, height)
 
     # Try to find the inner corners of the checkerboard
-    foundL, cornersL = cv2.findChessboardCorners(grayL, CHECKERBOARD, None)
-    foundR, cornersR = cv2.findChessboardCorners(grayR, CHECKERBOARD, None)
+    foundL, cornersL = cv2.findChessboardCorners(left, CHECKERBOARD, None)
+    foundR, cornersR = cv2.findChessboardCorners(right, CHECKERBOARD, None)
 
     if foundL and foundR:
         # Refine corner positions for higher accuracy
-        cornersL = cv2.cornerSubPix(grayL, cornersL, (11, 11), (-1, -1), CRITERIA)
-        cornersR = cv2.cornerSubPix(grayR, cornersR, (11, 11), (-1, -1), CRITERIA)
+        cornersL = cv2.cornerSubPix(left, cornersL, (11, 11), (-1, -1), CRITERIA)
+        cornersR = cv2.cornerSubPix(right, cornersR, (11, 11), (-1, -1), CRITERIA)
 
         # Store points
         objpoints.append(objp)
         imgpoints_L.append(cornersL)
         imgpoints_R.append(cornersR)
 
-        if first_good_pair is None:
-            first_good_pair = (cornersL.copy(), cornersR.copy())
+        if first_good_pair_index is None:
+            first_good_pair_index = len(imgpoints_L) - 1
 
         print(f"Pair {i}: corners found.")
     else:
@@ -121,9 +120,9 @@ print("Translation vector (T):\n", T)
 
 
 # Homography calculation (Left to Right)
-if first_good_pair is not None:
-    ptsL = first_good_pair[0].reshape(-1, 2)
-    ptsR = first_good_pair[1].reshape(-1, 2)
+if first_good_pair_index is not None:
+    ptsL = imgpoints_L[first_good_pair_index].reshape(-1, 2)
+    ptsR = imgpoints_R[first_good_pair_index].reshape(-1, 2)
     H, mask = cv2.findHomography(ptsL, ptsR, cv2.RANSAC, 5.0)
     print("\n Homography Matrix (H):\n", H)
 else:

@@ -1,7 +1,9 @@
-from picamera2 import Picamera2
-import cv2
-import time
 import os
+import time
+
+import cv2
+# ignored for windows
+from picamera2 import Picamera2  # type: ignore
 
 os.makedirs("calib_images", exist_ok=True)  # If the folder calib_images doesn’t exist, it will be created
 

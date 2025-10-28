@@ -6,8 +6,8 @@ import os
 # Path from calibrate-image_pairs.py
 CALIB_DIR = "calib_images"
 
-# (7, 6) means 7 inner corners horizontally, 6 vertically (8 x 7 squares)
-CHECKERBOARD = (7, 6)
+# (8, 6) means 8 inner corners horizontally, 6 vertically (9 x 7 squares)
+CHECKERBOARD = (8, 6)
 SQUARE_SIZE = 0.27  
 
 # Termination criteria for corner refinement
@@ -17,33 +17,30 @@ CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 # Loading Image Pairs from capture_images.py and sort
 left_images = sorted(glob.glob(os.path.join(CALIB_DIR, "left_*.jpg")))
 right_images = sorted(glob.glob(os.path.join(CALIB_DIR, "right_*.jpg")))
-
 # Check for list lengths
 if len(left_images) != len(right_images):
     print(f"Warning: {len(left_images)} left and {len(right_images)} right images found. Using the minimum.")
 
 # Use minimum number of pairs that exist
 num_pairs = min(len(left_images), len(right_images))
-
 if num_pairs == 0:
     raise RuntimeError("No image pairs found. Make sure capture_images.py ran successfully.")
-
 print(f"Found {num_pairs} image pairs for calibration.\n")
 
 # Object points represent the 3D coordinates of each checkerboard corner
-# Builds an array with one row per checkerboard inner corner; each row has three columns (x, y, z)
+# This builds an EMPTY 56 x 3 matrix with 56 (8 x 6) rows of checkerboard inner corners, and three columns
 objp = np.zeros((CHECKERBOARD[0] * CHECKERBOARD[1], 3), np.float32)
+
+# Here we replace each value in the empty matrix with x and y coordinates
 objp[:, :2] = np.mgrid[0:CHECKERBOARD[0], 0:CHECKERBOARD[1]].T.reshape(-1, 2)
 objp *= SQUARE_SIZE  # scale from units to meters
 
 # Lists to store all successful detections
-objpoints = []  # 3D points in real world space
+objpoints = []  # This will hold one copy of objp per successive pair
 imgpoints_L = []  # 2D points in left camera (pixel points)
 imgpoints_R = []  # 2D points in right camera (pixel points)
-
 image_size = None
 first_good_pair_index = None  # for homography computation
-
 
 # Find Chessboard Corners
 for i, (left_path, right_path) in enumerate(zip(left_images, right_images)):
@@ -54,8 +51,6 @@ for i, (left_path, right_path) in enumerate(zip(left_images, right_images)):
     if left is None or right is None:
         print(f"Could not read pair {i}, skipping.")
         continue
-
-    # findChessboardCorners requires grayscale conversion (images already loaded in gray)
 
     # Store image size once
     if image_size is None:
@@ -85,7 +80,6 @@ for i, (left_path, right_path) in enumerate(zip(left_images, right_images)):
 print(f"\nTotal valid pairs used: {len(objpoints)}")
 if len(objpoints) < 5:
     raise RuntimeError("Not enough valid pairs for accurate calibration (need at least ~10).")
-
 
 # Calibrate LEFT camera
 retL, K1, D1, rvecsL, tvecsL = cv2.calibrateCamera(

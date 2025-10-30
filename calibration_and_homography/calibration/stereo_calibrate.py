@@ -6,14 +6,15 @@ import cv2
 import numpy as np
 
 # === CONFIGURATION ===
-chessboard_size = (9, 6)  # inner corners (width, height)
-square_size = 0.04  # in meters (40mm)
+chessboard_size = (8, 6)  # inner corners (width, height)
+square_size = 0.027  # in meters (27mm)
 
 # === Paths ===
-calib_dir = "calib"
-left_images = sorted(glob.glob(os.path.join(calib_dir, "left_*.png")))
-right_images = sorted(glob.glob(os.path.join(calib_dir, "right_*.png")))
+calib_dir = "../calib_images"
+left_images = sorted(glob.glob(os.path.join(calib_dir, "left_*.jpg")))
+right_images = sorted(glob.glob(os.path.join(calib_dir, "right_*.jpg")))
 
+print("Looking for images in:", calib_dir)
 # === Prepare object points ===
 objp = np.zeros((chessboard_size[0]*chessboard_size[1], 3), np.float32)
 objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2)

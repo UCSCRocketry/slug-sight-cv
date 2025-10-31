@@ -4,10 +4,10 @@ import cv2
 import numpy as np
 
 # Path from capture_image_pairs.py
-CALIB_DIR = "calib_images"
+CALIB_DIR = "calib_images_USE"
 
 # (8, 6) means 8 inner corners horizontally, 6 vertically (9 x 7 squares)
-CHECKERBOARD = (8, 6)
+CHECKERBOARD = (6, 8)
 
 # Size of each square (meters)
 SQUARE_SIZE = 0.27
@@ -125,6 +125,13 @@ def main():
     print("\n Intrinsic Calibration Results:")
     print("Left RMS error:", retL)
     print("Right RMS error:", retR)
+
+    print("\nLeft Camera Intrinsic Matrix (K1):\n", K1)
+    print("Left Camera Distortion Coefficients (D1):\n", D1)
+
+    print("\nRight Camera Intrinsic Matrix (K2):\n", K2)
+    print("Right Camera Distortion Coefficients (D2):\n", D2)
+
 
     # Stereo calibration to find relative pose R, T (keeping intrinsics fixed)
     retStereo, K1, D1, K2, D2, R, T, E, F = cv2.stereoCalibrate(

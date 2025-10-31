@@ -1,132 +1,114 @@
-import time
+import os
+import glob
 import cv2
 import numpy as np
 
-# Camera indexes (adjust if needed)
-LEFT_CAM_INDEX  = 0
-RIGHT_CAM_INDEX = 1
+CALIB_DIR = "calib_images_USE"   # Your calibration image directory
+OUTPUT_DIR = "calib_output"
+CHECKERBOARD = (8, 6)
 
-# Load stereo calibration results
-params = np.load("calib_output/stereo_params.npz")
-K1, D1 = params["K1"], params["D1"]
-K2, D2 = params["K2"], params["D2"]
+# ---------------- Load Calibration Parameters ---------------- #
+params = np.load(os.path.join(OUTPUT_DIR, "stereo_params.npz"))
+K1, D1 = params["K1"], params["D1"]   # Left camera intrinsics + distortion
+K2, D2 = params["K2"], params["D2"]   # Right camera intrinsics + distortion
 
-# Downscale factor — lower = faster
-SCALE = 0.5   # 0.5 → half resolution (try 0.4 or 0.33 for Pi Zero class boards)
+print("Loaded camera intrinsics & distortion.")
 
-# FAST corner detector (quick keypoint finder)
-FAST = cv2.FastFeatureDetector_create(threshold=15, nonmaxSuppression=True)
+def find_corners(gray):
+    """ Returns detected checkerboard corners (refined) or (False, None). """
+    ret, corners = cv2.findChessboardCorners(gray, CHECKERBOARD, None)
+    if not ret:
+        return False, None
 
-# BRIEF descriptor extractor (very fast, pairs well with FAST)
-BRIEF = cv2.xfeatures2d.BriefDescriptorExtractor_create()
-
-# Hamming-based matcher (required for BRIEF descriptors)
-BF = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-
-# RANSAC threshold for homography
-RANSAC_THRESH = 3.0
-
-# Optional display
-SHOW_WINDOW = True
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+    corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+    return True, corners
 
 
-def make_undistort_maps(K, D, size):
-    """Precompute undistortion remap grids for per-frame fast correction."""
-    w, h = size
-    newK, _ = cv2.getOptimalNewCameraMatrix(K, D, (w, h), 0)
-    return cv2.initUndistortRectifyMap(K, D, None, newK, (w, h), cv2.CV_16SC2)
+# ---------------- Load Image Pairs ---------------- #
+left_images = sorted(glob.glob(os.path.join(CALIB_DIR, "left_*.jpg")))
+right_images = sorted(glob.glob(os.path.join(CALIB_DIR, "right_*.jpg")))
+num_pairs = min(len(left_images), len(right_images))
+
+if num_pairs == 0:
+    raise RuntimeError("No matching left/right pairs found.")
+
+print(f"Found {num_pairs} image pairs.\n")
+
+# ---------------- Compute Homography From First Valid Pair ---------------- #
+H = None
+for lp, rp in zip(left_images, right_images):
+    left = cv2.imread(lp, cv2.IMREAD_GRAYSCALE)
+    right = cv2.imread(rp, cv2.IMREAD_GRAYSCALE)
+
+    okL, cL = find_corners(left)
+    okR, cR = find_corners(right)
+
+    if okL and okR:
+        ptsL = cL.reshape(-1, 2)
+        ptsR = cR.reshape(-1, 2)
+
+        # Compute Homography mapping RIGHT → LEFT frame
+        H, mask = cv2.findHomography(ptsR, ptsL, cv2.RANSAC, 5.0)
+        print(f"✅ Homography computed using: {os.path.basename(lp)}, {os.path.basename(rp)}")
+        break
+
+if H is None:
+    raise RuntimeError("Could not compute homography — no usable corner pairs found.")
+
+# Convert to LEFT → RIGHT warp
+H = np.linalg.inv(H)
+
+np.save(os.path.join(OUTPUT_DIR, "homography.npy"), H)
+print("💾 Saved homography: calib_output/homography.npy\n")
 
 
-def detect_and_describe(gray):
-    """FAST → BRIEF pipeline."""
-    keypoints = FAST.detect(gray, None)
-    if not keypoints:
-        return None, None
-    keypoints, descriptors = BRIEF.compute(gray, keypoints)
-    return keypoints, descriptors
+# ---------------- Stitch All Pairs Using Homography ---------------- #
+STITCH_DIR = os.path.join(OUTPUT_DIR, "stitched_pairs")
+os.makedirs(STITCH_DIR, exist_ok=True)
+print("Stitching all image pairs...\n")
 
+for i, (lp, rp) in enumerate(zip(left_images, right_images)):
+    left = cv2.imread(lp)
+    right = cv2.imread(rp)
 
-def main():
-    capL = cv2.VideoCapture(LEFT_CAM_INDEX)
-    capR = cv2.VideoCapture(RIGHT_CAM_INDEX)
+    if left is None or right is None:
+        continue
 
-    if not capL.isOpened() or not capR.isOpened():
-        raise RuntimeError("Could not open both cameras.")
+    # Undistort using intrinsics
+    left = cv2.undistort(left, K1, D1)
+    right = cv2.undistort(right, K2, D2)
 
-    # Get frame size
-    okL, frameL = capL.read()
-    okR, frameR = capR.read()
-    if not okL or not okR:
-        raise RuntimeError("Failed to read initial frames.")
+    hL, wL = left.shape[:2]
+    hR, wR = right.shape[:2]
 
-    h, w = frameL.shape[:2]
-    size = (w, h)
+    # Project corners of LEFT image
+    corners_left = np.array([[0,0],[wL,0],[wL,hL],[0,hL]], dtype=np.float32).reshape(-1,1,2)
+    projected = cv2.perspectiveTransform(corners_left, H)
 
-    # Precompute remap maps for undistortion
-    map1_L, map2_L = make_undistort_maps(K1, D1, size)
-    map1_R, map2_R = make_undistort_maps(K2, D2, size)
+    corners_right = np.array([[0,0],[wR,0],[wR,hR],[0,hR]], dtype=np.float32).reshape(-1,1,2)
 
-    print("✅ Running optimized homography on Raspberry Pi...\n")
-    fps_timer = time.time()
-    frames = 0
+    all_pts = np.vstack((projected, corners_right))
 
-    while True:
-        okL, frameL = capL.read()
-        okR, frameR = capR.read()
-        if not okL or not okR:
-            continue
+    x_min, y_min = np.int32(all_pts.min(axis=0).ravel())
+    x_max, y_max = np.int32(all_pts.max(axis=0).ravel())
 
-        # Undistort
-        undistL = cv2.remap(frameL, map1_L, map2_L, cv2.INTER_LINEAR)
-        undistR = cv2.remap(frameR, map1_R, map2_R, cv2.INTER_LINEAR)
+    # Translate so stitched image has no negative coordinates
+    translation = np.array([[1,0,-x_min],[0,1,-y_min],[0,0,1]], np.float32)
+    H_shifted = translation @ H
 
-        # Downscale for speed
-        smallL = cv2.resize(undistL, None, fx=SCALE, fy=SCALE, interpolation=cv2.INTER_LINEAR)
-        smallR = cv2.resize(undistR, None, fx=SCALE, fy=SCALE, interpolation=cv2.INTER_LINEAR)
+    canvas_w, canvas_h = x_max - x_min, y_max - y_min
 
-        # Convert to grayscale
-        grayL = cv2.cvtColor(smallL, cv2.COLOR_BGR2GRAY)
-        grayR = cv2.cvtColor(smallR, cv2.COLOR_BGR2GRAY)
+    # Warp LEFT into RIGHT’s perspective
+    stitched = cv2.warpPerspective(left, H_shifted, (canvas_w, canvas_h))
 
-        # FAST + BRIEF feature detection/description
-        kL, dL = detect_and_describe(grayL)
-        kR, dR = detect_and_describe(grayR)
-        if dL is None or dR is None:
-            continue
+    # Paste RIGHT inside stitched canvas
+    stitched[-y_min:hR-y_min, -x_min:wR-x_min] = right
 
-        # Match descriptors
-        matches = BF.match(dL, dR)
-        if len(matches) < 12:
-            continue
+    save_path = os.path.join(STITCH_DIR, f"stitched_{i:02d}.jpg")
+    cv2.imwrite(save_path, stitched)
+    print(f"Saved: {save_path}")
 
-        # Extract matched points
-        ptsL = np.float32([kL[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-        ptsR = np.float32([kR[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
-
-        # Compute homography with RANSAC
-        H, mask = cv2.findHomography(ptsL, ptsR, cv2.RANSAC, RANSAC_THRESH)
-
-        # FPS display
-        frames += 1
-        if frames % 10 == 0:
-            dt = time.time() - fps_timer
-            print(f"FPS: {frames/dt:.1f}  matched: {len(matches)}")
-            fps_timer = time.time()
-            frames = 0
-
-        # Optional visualization
-        if SHOW_WINDOW and H is not None:
-            disp = cv2.drawMatches(smallL, kL, smallR, kR, matches[:30], None,
-                                   flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-            cv2.imshow("Homography (FAST+BRIEF, Pi Optimized)", disp)
-            if cv2.waitKey(1) & 0xFF in (27, ord('q')):
-                break
-
-    capL.release()
-    capR.release()
-    if SHOW_WINDOW:
-        cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
+print("\nFinished stitching ALL image pairs.")
+print(f"Output folder: {STITCH_DIR}\n")
+print("Left image is warped into right frame → combined panoramic result.")

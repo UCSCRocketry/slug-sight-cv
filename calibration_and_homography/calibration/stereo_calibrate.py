@@ -6,11 +6,11 @@ import cv2
 import numpy as np
 
 # === CONFIGURATION ===
-chessboard_size = (8, 6)  # inner corners (width, height)
+chessboard_size = (6, 8)  # inner corners (width, height)
 square_size = 0.027  # in meters (27mm)
 
 # === Paths ===
-calib_dir = "../calib_images"
+calib_dir = "../calib_images_USE"
 left_images = sorted(glob.glob(os.path.join(calib_dir, "left_*.jpg")))
 right_images = sorted(glob.glob(os.path.join(calib_dir, "right_*.jpg")))
 
@@ -74,3 +74,18 @@ np.savez("stereo_calib.npz",
          R=R, T=T, E=E, F=F, R1=R1, R2=R2, P1=P1, P2=P2, Q=Q)
 
 print("\n Calibration complete. Saved as stereo_calib.npz")
+print("\n Calibration Results:")
+print("Camera Matrix 1:\n", cameraMatrix1)
+print("Distortion Coefficients 1:\n", distCoeffs1)
+print("Camera Matrix 2:\n", cameraMatrix2)
+print("Distortion Coefficients 2:\n", distCoeffs2)
+print("Rotation between cameras:\n", R)
+print("Translation between cameras:\n", T)
+print("Essential Matrix:\n", E)
+print("Fundamental Matrix:\n", F)
+print("Rectification Matrix 1:\n", R1)
+print("Rectification Matrix 2:\n", R2)
+print("Projection Matrix 1:\n", P1)
+print("Projection Matrix 2:\n", P2)
+print("Disparity-to-Depth Mapping Matrix Q:\n", Q)
+

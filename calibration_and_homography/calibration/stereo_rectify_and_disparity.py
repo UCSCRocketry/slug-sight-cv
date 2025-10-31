@@ -7,7 +7,7 @@ import numpy as np
 
 # === Paths ===
 calib_file = "stereo_calib.npz"
-image_dir = "calib"
+image_dir = "../calib_images_USE"
 output_dir = "rectified"
 os.makedirs(output_dir, exist_ok=True)
 
@@ -24,8 +24,8 @@ P2 = data['P2']
 Q = data['Q']
 
 # === Image pairs ===
-left_images = sorted(glob.glob(os.path.join(image_dir, "left_*.png")))
-right_images = sorted(glob.glob(os.path.join(image_dir, "right_*.png")))
+left_images = sorted(glob.glob(os.path.join(image_dir, "left_*.jpg")))
+right_images = sorted(glob.glob(os.path.join(image_dir, "right_*.jpg")))
 
 # === Get image size from first image
 img_shape = cv2.imread(left_images[0]).shape[:2][::-1]  # (width, height)
@@ -52,8 +52,8 @@ for i, (l_path, r_path) in enumerate(zip(left_images, right_images)):
     rectR = cv2.remap(imgR, map2x, map2y, cv2.INTER_LINEAR)
 
     # Save rectified images
-    cv2.imwrite(os.path.join(output_dir, f"rect_left_{i:02d}.png"), rectL)
-    cv2.imwrite(os.path.join(output_dir, f"rect_right_{i:02d}.png"), rectR)
+    cv2.imwrite(os.path.join(output_dir, f"rect_left_{i:02d}.jpg"), rectL)
+    cv2.imwrite(os.path.join(output_dir, f"rect_right_{i:02d}.jpg"), rectR)
 
     # Convert to grayscale for disparity
     grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
@@ -64,7 +64,7 @@ for i, (l_path, r_path) in enumerate(zip(left_images, right_images)):
     disp_vis = np.uint8(disp_vis)
 
     # Save and display disparity
-    cv2.imwrite(os.path.join(output_dir, f"disp_{i:02d}.png"), disp_vis)
+    cv2.imwrite(os.path.join(output_dir, f"disp_{i:02d}.jpg"), disp_vis)
     cv2.imshow("Disparity", disp_vis)
     cv2.waitKey(0)
 

@@ -29,15 +29,16 @@ This folder contains a clean implementation for calibrating two separate fisheye
 **Left Camera:**
 
 - 39 images successfully processed
-- Mean reprojection error: 0.0976 pixels (excellent)
+- Mean reprojection error: 0.0976 pixels
 
 **Right Camera:**
 
 - 39 images successfully processed
-- Mean reprojection error: 0.0777 pixels (excellent)
+- Mean reprojection error: 0.0777 pixels
 
 ## Output Files
 
+- `stitched_output/*` - Left and right image pairs stitched
 - `left_camera_calibration.npz` - Left camera calibration parameters
 - `right_camera_calibration.npz` - Right camera calibration parameters
 - `undistorted_output/test_left_undistorted.jpg` - Sample undistorted left image
@@ -50,13 +51,9 @@ This folder contains a clean implementation for calibrating two separate fisheye
 Run the calibration:
 
 ```bash
-python separate_camera_calibration.py
+python3 undistortion-stitching.py
 ```
 
-## Next Steps
-
-With the cameras now calibrated and undistortion maps created, you can:
-
-1. Compute homography between the undistorted images for stitching
-2. Create a real-time pipeline that undistorts and stitches frames
-3. Integrate with GStreamer for video processing
+## Next steps:
+- We need to fine tune this (after launch is fine) so that the top and bottom portions also line up. Would porbably need to add some other distortion correction to tilt the images inward towrd the stitch seam more or something.
+- Integrate this into a GStreamer pipeline in which this code runs on every frame produced by the left and right cams on the Pi, then sends every stitched frame to the Pi's HDMI port.

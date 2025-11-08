@@ -1,5 +1,3 @@
-# Fresh Camera Calibration
-
 This folder contains a clean implementation for calibrating two separate fisheye cameras independently.
 
 ## What This Does

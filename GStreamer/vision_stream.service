@@ -1,0 +1,27 @@
+[Unit]
+Description=GStreamer PiCam2 Streaming Service
+# We need to wait for the user's graphical session to be fully started.
+# Using multi-user.target ensures the user session exists.
+After=network.target multi-user.target 
+Wants=graphical.target
+
+[Service]
+# IMPORTANT: Use 'Type=simple' for simple execution.
+Type=simple
+# Ensure the service runs as the user with the active GUI session.
+User=plerion 
+# --- CRITICAL GRAPHICAL ENVIRONMENT VARIABLES ---
+# 1. Tells X11/Xorg where the display session is.
+Environment=DISPLAY=:0 
+# 2. Points to the user's runtime directory (needed by Wayland/XDG apps).
+# Change '1000' if 'plerion' is not the first user (i.e., not UID 1000).
+Environment=XDG_RUNTIME_DIR=/run/user/1000 
+
+ExecStart=/usr/bin/python3 /home/plerion/Documents/slug-sight-cv/GStreamer/streamer.py
+WorkingDirectory=/home/plerion/Documents/slug-sight-cv/GStreamer
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

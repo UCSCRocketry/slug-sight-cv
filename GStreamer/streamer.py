@@ -6,7 +6,8 @@ from datetime import datetime
 
 import cv2
 import gi
-from picamera2 import Picamera2
+
+# from picamera2 import Picamera2
 
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
@@ -17,25 +18,35 @@ class video():
     def __init__(self):
         self.number_frames = 0
         self.fps = 30
+        self.width = 640
+        self.height = 480
         self.duration = 1 / self.fps * Gst.SECOND
         
-        # --- PiCamera2 Setup ---
-        self.picam2 = Picamera2()
-        self.config = self.picam2.create_video_configuration(
-            main={"size": (640, 480), "format": "RGB888"},
-            controls={"FrameRate": float(self.fps)}
-        )
-        self.picam2.configure(self.config)
-        self.picam2.start()
+        # --- OpenCV Setup ---
+        self.cap = cv2.VideoCapture('./CrabRave.mp4')
+        if not self.cap.isOpened():
+            print("Error: Could not open OpenCV video source.")
+            sys.exit(1)
+
+        # Set camera properties
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+        
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"OpenCV Source Initialized: {self.width}x{self.height} @ {self.fps} FPS")
+
 
         # Timestamping (So every file has a different name)
         timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
         self.output_filename = f"recording_{timestamp}.ts"
         
         # --- GStreamer Pipeline with Tee and File Sink ---
-        main_stream = "appsrc name=source is-live=true block=true format=GST_FORMAT_TIME " \
-                      " caps=video/x-raw,format=BGR,width=640,height=480,framerate={}/1 " \
-                      "! videoconvert ! video/x-raw,format=I420 ".format(self.fps)
+
+        main_stream = f"appsrc name=source is-live=true block=true format=GST_FORMAT_TIME " \
+                      f" caps=video/x-raw,format=BGR,width={self.width},height={self.height},framerate={self.fps}/1 " \
+                      f"! videoconvert ! video/x-raw,format=I420 "
 
         tee_element = "! tee name=t "
 
@@ -43,7 +54,7 @@ class video():
         file_branch = "t. ! queue max-size-buffers=1 name=queue_file " \
                       "! x264enc tune=zerolatency bitrate=2000 speed-preset=fast " \
                       "! mpegtsmux " \
-                      f"! filesink buffer-mode=2 location={self.output_filename} " # <-- Used f-string
+                      f"! filesink buffer-mode=2 location={self.output_filename} "
 
         # 4. Display Branch (Local Window)
         network_branch = "t. ! queue name=queue_display " \
@@ -69,7 +80,6 @@ class video():
             
             self.loop = GLib.MainLoop()
             try:
-                # <-- 4. UPDATE PRINT MESSAGE ---
                 print(f"Streaming and saving video to '{self.output_filename}'. Press Ctrl+C to stop.")
                 self.loop.run()
                 
@@ -105,15 +115,13 @@ class video():
             finally:
                 print("Cleaning up resources...")
                 self.pipeline.set_state(Gst.State.NULL)
-                self.picam2.stop()
-                self.picam2.close()
+                self.cap.release()
                 print("Cleanup complete.")
 
-
     def on_need_data(self, src, lenght):
-        frame = self.picam2.capture_array() 
+        ret, frame = self.cap.read()
         
-        if frame is not None:
+        if ret: # 'ret' is True if a frame was read successfully
             data = frame.tobytes() 
             
             buf = Gst.Buffer.new_allocate(None, len(data), None)
@@ -129,11 +137,12 @@ class video():
             
             if retval != Gst.FlowReturn.OK:
                 print(retval)
-            return True
+            return True # Continue pushing data
         else:
+            # End of stream (e.g., camera disconnected or video file ended)
             src.emit('end-of-stream')
-            print("End of camera stream detected.")
-            return False
+            print("End of OpenCV stream detected.")
+            return False # Stop the 'need-data' signal
 
 if __name__ == "__main__":
     v = video()

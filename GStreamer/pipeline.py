@@ -32,7 +32,8 @@ import gi
 import numpy as np
 from picamera2 import Picamera2
 
-# TODO: Import stitching function from undistort-stitching.py
+# Import the simple stitching function
+from realtime_stitch import stitch_frames
 
 gi.require_version('Gst', '1.0')
 from gi.repository import GLib, Gst
@@ -89,7 +90,7 @@ class StitchingPipeline:
             "! waylandsink fullscreen=true sync=false"    # Display video on Wayland compositor, shows frames as soon as possible
         )
 
-        self.pipeline = Gst.parse_launch(pipeline_str)
+        self.pipeline = Gst.parse_launch(pipeline_string)
 
         # Get the appsrc element to push stitched frames into
         self.app_src = self.pipeline.get_by_name('stitched_src')
@@ -101,7 +102,7 @@ class StitchingPipeline:
         # For sanity and debugging
         print(f"Output resolution: {self.output_width}x{self.output_height}")
 
-        def capture_stitch_push(self):
+    def capture_stitch_push(self):
         """
         Runs in separate thread (captures from both cameras, stitches, and pushes to GStreamer).
         """
@@ -111,22 +112,21 @@ class StitchingPipeline:
             try:
                 # Step 1: Capture both frames (synchronized)
                 capture_start = time.perf_counter()
-                frame_left = self.left_cam.capture_array()  # TODO: SAVE AND PRINT TIME AT LEFT CAPTURE
-                frame_right = self.right_cam.capture_array()  # TODO: SAVE AND PRINT TIME AT RIGHT CAPTURE
-                capture_time = (time.perf_counter() - capture_start) * 1000  # time to capture both frames
+                frame_left = self.left_cam.capture_array()
+                frame_right = self.right_cam.capture_array()
+                capture_time = (time.perf_counter() - capture_start) * 1000
 
-                # Step 2: Stitch frames together
+                # Step 2: Stitch frames together (no undistortion)
                 stitch_start = time.perf_counter()
-                # TODO: MAKE SURE stitch_frames IS IMPORTED and CORRECT in undistort-stitching.py
-                stitched_frame = stitch_frames(frame_left, frame_right)
-                stitch_time = (time.perf_counter() - stitch_start) * 1000  # time to stitch frames
+                stitched_frame = stitch_frames(frame_left, frame_right, overlap_ratio=0.15)
+                stitch_time = (time.perf_counter() - stitch_start) * 1000
 
                 # Verify output dimensions
                 if stitched_frame.shape[:2] != (self.output_height, self.output_width):
                     print(f"Warning: Stitched frame shape {stitched_frame.shape} "
                           f"doesn't match expected ({self.output_height}, {self.output_width}, 3)")
 
-                # STEP 3: Create GStreamer buffer
+                # Step 3: Create GStreamer buffer
                 stitched_frame_data = stitched_frame.tobytes()
 
                 # Make a buffer and fill with stitched frame data
@@ -138,15 +138,14 @@ class StitchingPipeline:
                     buffer.unmap(map_info)
                 else:
                     raise RuntimeError("Could not map buffer for writing")
-                    map_info.data[:] = stitched_frame_data
 
                 # Set buffer timestamps for proper playback timing
-                buf.duration = self.duration
+                buffer.duration = self.duration
                 timestamp = self.number_frames * self.duration
-                buf.pts = buf.dts = int(timestamp)
+                buffer.pts = buffer.dts = int(timestamp)
 
                 # Step 4: Push buffer into GStreamer pipeline
-                return_val = self.app_src.emit('push-buffer', buffer)
+                retval = self.app_src.emit('push-buffer', buffer)
 
                 # Check return status code for errors in buffer pushing
                 if retval != Gst.FlowReturn.OK:
@@ -258,10 +257,11 @@ class StitchingPipeline:
 
 
 if __name__ == "__main__":
-    # (May need to change dimensions to accomodate for our VTX)
+    
+    # TODO if gpio pin active:
+        # (May need to change dimensions to accomodate for our VTX)
     pipeline = StitchingPipeline(
         output_width=1280,  # Maybe adjust
         output_height=480   # Maybe adjust
     )
-
     pipeline.run()  # Runs the StitchingPipeline class
